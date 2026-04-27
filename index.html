@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GS画像生成ツール</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="GS画像生成">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:#f4f4f0;color:#1a1a1a;min-height:100vh;}
+
+header{background:#1a1a2e;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:10px;}
+header h1{font-size:16px;font-weight:700;}
+header span{font-size:11px;color:#aaa;}
+
+/* PC：2カラム / スマホ：1カラム縦並び */
+.app{max-width:1100px;margin:0 auto;padding:20px;display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start;}
+@media(max-width:700px){
+  .app{grid-template-columns:1fr;padding:12px;}
+  header h1{font-size:14px;}
+  header span{display:none;}
+}
+
+.panel{background:#fff;border-radius:12px;border:1px solid #e0e0dc;overflow:hidden;}
+.tab-nav{display:flex;border-bottom:1px solid #e0e0dc;}
+.tab-btn{flex:1;padding:11px 6px;border:none;background:none;font-family:inherit;font-size:12px;font-weight:700;color:#888;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;}
+.tab-btn.active{color:#1a1a2e;border-bottom:2px solid #e05a1e;}
+.tab-content{display:none;padding:16px;}
+.tab-content.active{display:block;}
+
+.fg{margin-bottom:14px;}
+.fg>label{display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;}
+.fg input[type="text"],.fg input[type="number"],.fg select{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-family:inherit;font-size:14px;color:#1a1a1a;outline:none;transition:border-color .15s;}
+.fg input:focus,.fg select:focus{border-color:#e05a1e;}
+hr.div{border:none;border-top:1px solid #eee;margin:14px 0;}
+.toggle-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.toggle-row label{font-size:13px;color:#555;}
+input[type="checkbox"]{width:15px;height:15px;accent-color:#e05a1e;cursor:pointer;flex-shrink:0;}
+
+.btn-primary{width:100%;padding:11px;background:#e05a1e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;transition:background .15s;margin-top:6px;}
+.btn-primary:active{background:#c94c14;}
+.seg-btn{padding:6px 0;border:1px solid #ddd;border-radius:6px;background:none;font-family:inherit;font-size:12px;cursor:pointer;transition:all .15s;}
+.seg-btn.active{border-color:#e05a1e;color:#e05a1e;font-weight:700;background:#fff5f1;}
+
+.sec-title{font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;display:flex;align-items:center;gap:6px;}
+.sec-title span{font-size:10px;color:#bbb;font-weight:400;text-transform:none;letter-spacing:0;}
+
+.fuel-item{background:#f8f8f5;border:1px solid #e0e0dc;border-radius:8px;padding:8px 10px;margin-bottom:6px;}
+.fuel-item.off{opacity:.42;}
+.fuel-row{display:flex;align-items:center;gap:6px;margin-bottom:6px;}
+.ord-btns{display:flex;flex-direction:column;gap:1px;flex-shrink:0;}
+.ord-btns button{width:24px;height:18px;border:1px solid #ccc;border-radius:3px;background:#fff;font-size:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .1s;}
+.ord-btns button:active{background:#e05a1e;color:#fff;border-color:#e05a1e;}
+.ord-btns button:disabled{opacity:.3;cursor:default;}
+.fuel-label{font-size:12px;font-weight:700;flex:1;}
+.fuel-fields{display:grid;grid-template-columns:1fr auto;gap:6px;align-items:center;}
+.fuel-fields input[type="number"]{width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:6px;font-family:inherit;font-size:16px;font-weight:700;outline:none;}
+.fuel-fields input[type="number"]:focus{border-color:#e05a1e;}
+.color-wrap{display:flex;flex-direction:column;align-items:center;gap:2px;}
+.color-wrap label{font-size:9px;color:#888;}
+.color-wrap input[type="color"]{width:36px;height:30px;border:1px solid #ddd;border-radius:5px;padding:1px;background:none;cursor:pointer;}
+
+.slot-item{background:#f8f8f5;border:1px solid #e0e0dc;border-radius:8px;padding:9px 11px;margin-bottom:7px;}
+.slot-item.off{opacity:.42;}
+.slot-row{display:flex;align-items:center;gap:7px;margin-bottom:7px;}
+.slot-del{width:28px;height:28px;border:none;background:none;color:#bbb;font-size:16px;cursor:pointer;border-radius:4px;transition:color .1s,background .1s;display:flex;align-items:center;justify-content:center;}
+.slot-del:active{color:#e05a1e;background:#fff0ec;}
+.slot-fields{display:flex;flex-direction:column;gap:5px;}
+.slot-fields input{width:100%;padding:6px 9px;border:1px solid #ddd;border-radius:6px;font-family:inherit;font-size:14px;outline:none;}
+.slot-fields input:focus{border-color:#e05a1e;}
+.btn-add{width:100%;padding:10px;border:1.5px dashed #ddd;border-radius:8px;background:none;font-family:inherit;font-size:13px;color:#888;cursor:pointer;transition:border-color .15s,color .15s;margin-top:2px;}
+.btn-add:active{border-color:#e05a1e;color:#e05a1e;}
+.btn-add:disabled{opacity:.3;cursor:default;}
+
+.preset-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:10px;}
+.preset-thumb{aspect-ratio:1;border-radius:6px;border:2px solid transparent;cursor:pointer;overflow:hidden;position:relative;transition:border-color .15s;}
+.preset-thumb.sel{border-color:#e05a1e;}
+.preset-thumb canvas{width:100%;height:100%;display:block;}
+.preset-thumb .plbl{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.55);color:#fff;font-size:10px;text-align:center;padding:2px 4px;}
+.upload-area{border:2px dashed #ddd;border-radius:8px;padding:18px;text-align:center;cursor:pointer;font-size:13px;color:#888;margin-bottom:10px;transition:border-color .15s,color .15s;}
+.upload-area:active{border-color:#e05a1e;color:#e05a1e;}
+.color-row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.color-row2>div>label{display:block;font-size:11px;font-weight:700;color:#555;margin-bottom:5px;}
+.color-row2 input[type="color"]{width:100%;height:38px;border:1px solid #ddd;border-radius:7px;cursor:pointer;padding:2px;background:none;}
+
+/* プレビュー：PCはsticky、スマホは通常フロー */
+.preview-panel{position:sticky;top:20px;}
+@media(max-width:700px){
+  .preview-panel{position:static;}
+  /* スマホでは操作パネルが上、プレビューが下になるよう順序を入れ替え */
+  .app{display:flex;flex-direction:column;}
+  .preview-panel{order:-1;}  /* プレビューを先に表示 */
+}
+
+.panel-hd{padding:13px 18px;border-bottom:1px solid #e0e0dc;display:flex;align-items:center;justify-content:space-between;}
+.panel-hd h2{font-size:13px;font-weight:700;color:#555;}
+.canvas-wrap{padding:16px;display:flex;justify-content:center;background:#f0f0ec;}
+canvas{width:100%;max-width:480px;aspect-ratio:1;border-radius:6px;box-shadow:0 2px 12px rgba(0,0,0,.15);display:block;image-rendering:pixelated;}
+.btn-dl{display:block;width:calc(100% - 36px);margin:0 18px 18px;padding:12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;text-align:center;transition:background .15s;}
+.btn-dl:active{background:#2d2d4e;}
+</style>
+</head>
+<body>
+
+<!-- Android インストールバナー -->
+<div id="install-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#1a1a2e;color:#fff;padding:14px 16px;align-items:center;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.3);">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e05a1e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M3 22V9l9-7 9 7v13"/><path d="M9 22V12h6v10"/></svg>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:13px;font-weight:700;">GS画像生成ツール</div>
+    <div style="font-size:11px;color:#aaa;margin-top:2px;">ホーム画面に追加してアプリとして使えます</div>
+  </div>
+  <button id="btn-install" style="padding:8px 14px;background:#e05a1e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;">追加する</button>
+  <button id="btn-install-close" style="width:28px;height:28px;background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
+</div>
+
+<!-- iOS インストール案内バナー -->
+<div id="ios-banner" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:999;background:#1a1a2e;color:#fff;padding:14px 16px;align-items:flex-start;gap:12px;box-shadow:0 -2px 12px rgba(0,0,0,.3);">
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#e05a1e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;margin-top:2px;"><path d="M3 22V9l9-7 9 7v13"/><path d="M9 22V12h6v10"/></svg>
+  <div style="flex:1;min-width:0;">
+    <div style="font-size:13px;font-weight:700;">ホーム画面に追加する方法（iOS）</div>
+    <div style="font-size:12px;color:#ccc;margin-top:4px;line-height:1.6;">
+      ① 下部の 共有ボタン <span style="background:#444;padding:1px 5px;border-radius:4px;">⬆</span> をタップ<br>
+      ② 「ホーム画面に追加」を選択<br>
+      ③ 「追加」をタップ
+    </div>
+  </div>
+  <button id="btn-ios-close" style="width:28px;height:28px;background:none;border:none;color:#aaa;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">×</button>
+</div>
+
+<header>
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#e05a1e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 22V9l9-7 9 7v13"/><path d="M9 22V12h6v10"/>
+    <path d="M18 8h2a1 1 0 0 1 1 1v3"/><path d="M21 12v4a1 1 0 0 1-1 1h-1"/>
+  </svg>
+  <h1>ガソリンスタンド 画像生成ツール</h1>
+  <span>prototype v0.2</span>
+</header>
+
+<div class="app">
+
+  <!-- 左：コントロール -->
+  <div class="panel">
+    <div class="tab-nav">
+      <button class="tab-btn active" onclick="switchTab('price')">燃料価格表示</button>
+      <button class="tab-btn" onclick="switchTab('header')">ヘッダー＋画像</button>
+    </div>
+
+    <!-- ── パターン1 ── -->
+    <div id="tab-price" class="tab-content active">
+
+      <div class="fg">
+        <label>表示種数</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button class="seg-btn active" id="cnt3" onclick="setCount(3,this)">3種表示</button>
+          <button class="seg-btn"        id="cnt4" onclick="setCount(4,this)">4種表示</button>
+        </div>
+      </div>
+
+      <hr class="div">
+
+      <div class="sec-title">油種設定 <span>▲▼で順番変更</span></div>
+      <div id="fuel-list"></div>
+
+      <hr class="div">
+
+      <!-- ヘッダーエリア設定 -->
+      <div class="sec-title">ヘッダーエリア</div>
+
+      <div class="fg">
+        <label>タイトルテキスト</label>
+        <input type="text" id="price-title" value="本日のガソリン価格" oninput="renderPrice()">
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;">背景色</div>
+          <input type="color" id="hdr-bg" value="#1a1a2e"
+            style="width:100%;height:34px;border:1px solid #ddd;border-radius:7px;padding:2px;cursor:pointer;background:none;"
+            oninput="renderPrice()">
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:#555;margin-bottom:5px;text-transform:uppercase;letter-spacing:.05em;">テキスト色</div>
+          <input type="color" id="hdr-text-color" value="#e05a1e"
+            style="width:100%;height:34px;border:1px solid #ddd;border-radius:7px;padding:2px;cursor:pointer;background:none;"
+            oninput="renderPrice()">
+        </div>
+      </div>
+
+      <div class="fg">
+        <label>フォント</label>
+        <select id="hdr-font" onchange="renderPrice()">
+          <option value="'Noto Sans JP'">Noto Sans JP（標準）</option>
+          <option value="serif">明朝体</option>
+          <option value="sans-serif">ゴシック体</option>
+        </select>
+      </div>
+
+      <hr class="div">
+
+      <div class="fg">
+        <label>スタイル</label>
+        <select id="price-style" onchange="renderPrice()">
+          <option value="dark">電光掲示板（黒背景）</option>
+          <option value="light">ホワイトボード（白背景）</option>
+          <option value="red">赤背景スタイル</option>
+          <option value="navy">ネイビースタイル</option>
+        </select>
+      </div>
+
+      <div class="fg">
+        <label>ショップ名（任意）</label>
+        <input type="text" id="shop-name" placeholder="例：○○石油 ××店" oninput="renderPrice()">
+      </div>
+
+      <div class="toggle-row">
+        <input type="checkbox" id="show-date" onchange="renderPrice()">
+        <label for="show-date">今日の日付を表示する</label>
+      </div>
+
+      <button class="btn-primary" onclick="renderPrice()">プレビュー更新</button>
+    </div>
+
+    <!-- ── パターン2 ── -->
+    <div id="tab-header" class="tab-content">
+
+      <div class="sec-title">ヘッダー</div>
+      <div class="fg">
+        <label>テキスト</label>
+        <input type="text" id="header-text" value="本日のセール情報" oninput="renderHeader()">
+      </div>
+      <div class="color-row2">
+        <div>
+          <label>背景色</label>
+          <input type="color" id="h-bg" value="#1a1a2e" oninput="renderHeader()">
+        </div>
+        <div>
+          <label>テキスト色</label>
+          <input type="color" id="h-text" value="#ffffff" oninput="renderHeader()">
+        </div>
+      </div>
+
+      <hr class="div">
+
+      <div class="fg">
+        <label>ベース画像</label>
+        <div class="preset-grid" id="preset-images"></div>
+        <div class="upload-area" onclick="document.getElementById('img-upload').click()">
+          ＋ 画像をアップロード
+          <input type="file" id="img-upload" accept="image/*" style="display:none" onchange="loadUploadedImage(event)">
+        </div>
+      </div>
+
+      <button class="btn-primary" onclick="renderHeader()">プレビュー更新</button>
+    </div>
+  </div>
+
+  <!-- 右：プレビュー -->
+  <div class="preview-panel">
+    <div class="panel">
+      <div class="panel-hd">
+        <h2>プレビュー（192 × 192 px）</h2>
+        <span style="font-size:11px;color:#aaa;">出力サイズ 192px</span>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="main-canvas" width="192" height="192"></canvas>
+      </div>
+      <button class="btn-dl" onclick="downloadImage()">PNG でダウンロード</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ══════════════════════════════════════
+   定数・状態
+══════════════════════════════════════ */
+const SIZE   = 192;
+const canvas = document.getElementById('main-canvas');
+const ctx    = canvas.getContext('2d');
+
+let currentTab     = 'price';
+let fuelCount      = 3;
+let selectedPreset = 0;
+let customImage    = null;
+
+let fuelDefs = [
+  { label:'レギュラー', unit:'円/L',   color:'#e03a1e', price:168, visible:true  },
+  { label:'ハイオク',   unit:'円/L',   color:'#f0a500', price:179, visible:true  },
+  { label:'軽油',       unit:'円/L',   color:'#1a7fe0', price:148, visible:true  },
+  { label:'灯油',       unit:'円/18L', color:'#6db0e0', price:108, visible:false },
+];
+
+let slots = [
+  { id:1, text:'洗車無料キャンペーン', sub:'本日限り！', visible:true  },
+  { id:2, text:'セルフ割引実施中',     sub:'2円/L引き',  visible:true  },
+  { id:3, text:'オイル交換ご予約受付', sub:'',           visible:false },
+];
+let nextSlotId = 4;
+
+const STYLES = {
+  dark : { bg:'#0a0a0f', card:'#141420', text:'#ffffff', accent:'#e05a1e', sub:'#7777aa' },
+  light: { bg:'#f0f0ec', card:'#e2e2de', text:'#1a1a2e', accent:'#e05a1e', sub:'#666688' },
+  red  : { bg:'#8b1a10', card:'#b02018', text:'#ffffff', accent:'#ffd700', sub:'#ffccaa' },
+  navy : { bg:'#0d1b4b', card:'#1a2f7a', text:'#ffffff', accent:'#00e5ff', sub:'#80aadd' },
+};
+
+/* ══════════════════════════════════════
+   タブ切替
+══════════════════════════════════════ */
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach((b,i) => {
+    b.classList.toggle('active', (i===0 && tab==='price') || (i===1 && tab==='header'));
+  });
+  document.getElementById('tab-price').classList.toggle('active', tab==='price');
+  document.getElementById('tab-header').classList.toggle('active', tab==='header');
+  tab === 'price' ? renderPrice() : renderHeader();
+}
+
+/* ══════════════════════════════════════
+   油種リスト
+══════════════════════════════════════ */
+function setCount(n, btn) {
+  fuelCount = n;
+  document.querySelectorAll('#cnt3,#cnt4').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (n === 4) {
+    fuelDefs.forEach(f => f.visible = true);
+  } else {
+    // 3種に切り替え：visible が3を超えていたら後ろから削る
+    let vis = fuelDefs.filter(f => f.visible);
+    while (vis.length > 3) {
+      for (let k = fuelDefs.length-1; k >= 0; k--) {
+        if (fuelDefs[k].visible) { fuelDefs[k].visible = false; break; }
+      }
+      vis = fuelDefs.filter(f => f.visible);
+    }
+    // 1種しかなければ先頭3つをvisibleにする
+    if (vis.length < 3) {
+      let added = 0;
+      fuelDefs.forEach(f => { if (!f.visible && added < 3-vis.length) { f.visible=true; added++; } });
+    }
+  }
+
+  buildFuelList();
+  renderPrice();
+}
+
+function buildFuelList() {
+  const list = document.getElementById('fuel-list');
+  if (!list) return;
+  list.innerHTML = '';
+  const show3    = fuelCount === 3;
+  const visCount = fuelDefs.filter(f => f.visible).length;
+
+  fuelDefs.forEach((f, i) => {
+    const div = document.createElement('div');
+    div.className = 'fuel-item' + (show3 && !f.visible ? ' off' : '');
+
+    // チェックボックス：3種モードのみ。visibleが3件でかつ未チェックの場合だけdisabled（これ以上追加不可）
+    const cbChecked  = f.visible ? 'checked' : '';
+    const cbDisabled = (show3 && !f.visible && visCount >= 3) ? 'disabled' : '';
+    const cbHtml = show3
+      ? `<input type="checkbox" ${cbChecked} ${cbDisabled}
+           onchange="toggleFuel(${i})"
+           style="width:14px;height:14px;accent-color:#e05a1e;cursor:pointer;flex-shrink:0;">`
+      : '';
+
+    div.innerHTML = `
+      <div class="fuel-row">
+        <div class="ord-btns">
+          <button onclick="moveFuel(${i},-1)" ${i===0?'disabled':''}>▲</button>
+          <button onclick="moveFuel(${i}, 1)" ${i===fuelDefs.length-1?'disabled':''}>▼</button>
+        </div>
+        ${cbHtml}
+        <span class="fuel-label" style="color:${f.color};">${f.label}</span>
+        <span style="font-size:10px;color:#aaa;">${f.unit}</span>
+      </div>
+      <div class="fuel-fields">
+        <input type="number" value="${f.price}" min="0" max="9999"
+          oninput="fuelDefs[${i}].price = +this.value; renderPrice();">
+        <div class="color-wrap">
+          <label>色</label>
+          <input type="color" value="${f.color}"
+            oninput="fuelDefs[${i}].color = this.value; buildFuelList(); renderPrice();">
+        </div>
+      </div>`;
+    list.appendChild(div);
+  });
+}
+
+function toggleFuel(i) {
+  const visCount = fuelDefs.filter(f => f.visible).length;
+  // チェックONにしようとして3件を超える場合は何もしない
+  if (!fuelDefs[i].visible && visCount >= 3) return;
+  fuelDefs[i].visible = !fuelDefs[i].visible;
+  buildFuelList();
+  renderPrice();
+}
+
+function moveFuel(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= fuelDefs.length) return;
+  [fuelDefs[i], fuelDefs[j]] = [fuelDefs[j], fuelDefs[i]];
+  buildFuelList();
+  renderPrice();
+}
+
+/* ══════════════════════════════════════
+   パターン1：価格描画
+══════════════════════════════════════ */
+function renderPrice() {
+  const sKey  = document.getElementById('price-style').value;
+  const s     = STYLES[sKey];
+  const shop  = (document.getElementById('shop-name').value || '').trim();
+  const showD = document.getElementById('show-date').checked;
+
+  ctx.clearRect(0, 0, SIZE, SIZE);
+  ctx.fillStyle = s.bg;
+  ctx.fillRect(0, 0, SIZE, SIZE);
+
+  // ドットグリッド（暗系スタイルのみ）
+  if (sKey === 'dark' || sKey === 'navy') {
+    ctx.fillStyle = 'rgba(255,255,255,0.045)';
+    for (let gy = 5; gy < SIZE; gy += 10)
+      for (let gx = 5; gx < SIZE; gx += 10)
+        ctx.fillRect(gx, gy, 1, 1);
+  }
+
+  const HDR_H  = Math.floor(SIZE / 4);   // 上部1/4固定
+  const hdrBg  = document.getElementById('hdr-bg').value;
+  const hdrCol = document.getElementById('hdr-text-color').value;
+  const hdrFnt = document.getElementById('hdr-font').value;
+  const title  = (document.getElementById('price-title').value || '本日のガソリン価格').trim();
+
+  // ヘッダー背景
+  ctx.fillStyle = hdrBg;
+  ctx.fillRect(0, 0, SIZE, HDR_H);
+
+  ctx.textAlign    = 'center';
+  ctx.textBaseline = 'middle';
+
+  // ショップ名（小さく上部）
+  if (shop) {
+    let sfs = 7;
+    ctx.font = `700 ${sfs}px ${hdrFnt}`;
+    while (ctx.measureText(shop).width > SIZE-12 && sfs > 5) {
+      sfs--; ctx.font = `700 ${sfs}px ${hdrFnt}`;
+    }
+    ctx.fillStyle = hdrCol + 'aa';
+    ctx.fillText(shop, SIZE/2, HDR_H * 0.25);
+  }
+
+  // タイトルテキスト（枠内最大サイズ・自動縮小）
+  const maxTitleH = shop ? HDR_H * 0.52 : HDR_H * 0.72; // 使える高さ
+  let tfs = Math.floor(maxTitleH * 0.85);                // 高さいっぱいから開始
+  ctx.font = `700 ${tfs}px ${hdrFnt}`;
+  while ((ctx.measureText(title).width > SIZE - 10 || tfs > maxTitleH) && tfs > 6) {
+    tfs--; ctx.font = `700 ${tfs}px ${hdrFnt}`;
+  }
+  ctx.fillStyle = hdrCol;
+  ctx.fillText(title, SIZE/2, shop ? HDR_H * 0.65 : HDR_H * 0.5);
+
+  // 下端アクセントライン
+  ctx.fillStyle = hdrCol + '55';
+  ctx.fillRect(0, HDR_H - 1, SIZE, 1);
+
+  const topY  = HDR_H + 4;
+  const PAD   = 4;
+
+  // 表示油種
+  const active = fuelCount === 4
+    ? fuelDefs.slice()
+    : fuelDefs.filter(f => f.visible);
+
+  if (active.length === 0) return;
+
+  const n      = active.length;
+  const GAP    = 3;
+  const dateH  = showD ? 13 : 0;
+  const totalH = SIZE - topY - PAD - dateH;
+  const cardH  = Math.floor((totalH - GAP*(n-1)) / n);
+  const cardW  = SIZE - PAD*2;
+
+  active.forEach((f, i) => {
+    const cx = PAD;
+    const cy = topY + i*(cardH + GAP);
+    const priceStr = (f.price !== undefined && f.price !== null && f.price !== '') ? String(f.price) : '---';
+
+    // カード
+    ctx.fillStyle = s.card;
+    rrect(ctx, cx, cy, cardW, cardH, 3);
+    ctx.fill();
+
+    // 油種名・単位エリア（左側）を先に確定
+    const lblFs  = Math.max(5, Math.min(cardH * 0.28, 10));
+    const unitFs = Math.max(4, Math.min(cardH * 0.20, 7));
+    ctx.font = `700 ${lblFs}px "Noto Sans JP"`;
+    const lblW  = ctx.measureText(f.label).width;
+    ctx.font = `400 ${unitFs}px "Noto Sans JP"`;
+    const unitW = ctx.measureText(f.unit).width;
+    const leftW = Math.max(lblW, unitW) + 10; // 油種エリア幅（余白込み）
+
+    // 7セグ価格：残り幅いっぱい・縦もカード高さいっぱいまで
+    const segMaxW = cardW - leftW - 6;
+    const segMaxH = cardH * 0.88;
+    // 桁数から横幅に収まる高さを計算（1桁あたり幅 ≒ height * 0.62）
+    const digits  = priceStr.length;
+    const segH    = Math.min(segMaxH, segMaxW / (digits * 0.62 + (digits-1) * 0.10));
+    const segTop  = cy + (cardH - segH) / 2;
+    const segRightX = cx + cardW - 3;
+    draw7seg(ctx, priceStr, segRightX, segTop, segH, s.text, s.card);
+
+    // 油種名（左・縦中央上寄り）
+    ctx.font         = `700 ${lblFs}px "Noto Sans JP"`;
+    ctx.fillStyle    = f.color;
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(f.label, cx+5, cy + cardH * 0.36);
+
+    // 単位（左・縦中央下寄り）
+    ctx.font         = `400 ${unitFs}px "Noto Sans JP"`;
+    ctx.fillStyle    = s.sub;
+    ctx.fillText(f.unit, cx+5, cy + cardH * 0.70);
+  });
+
+  ctx.textBaseline = 'alphabetic';
+
+  // 日付
+  if (showD) {
+    const d  = new Date();
+    const ds = `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日 現在`;
+    ctx.font         = '400 6px "Noto Sans JP"';
+    ctx.fillStyle    = s.sub;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(ds, SIZE/2, SIZE - 3);
+    ctx.textBaseline = 'alphabetic';
+  }
+}
+
+/* ══════════════════════════════════════
+   スロット管理
+══════════════════════════════════════ */
+function buildSlotList() {
+  const list = document.getElementById('slot-list');
+  if (!list) return;
+  list.innerHTML = '';
+
+  slots.forEach((slot, i) => {
+    const div = document.createElement('div');
+    div.className = 'slot-item' + (slot.visible ? '' : ' off');
+    div.innerHTML = `
+      <div class="slot-row">
+        <div class="ord-btns">
+          <button onclick="moveSlot(${i},-1)" ${i===0?'disabled':''}>▲</button>
+          <button onclick="moveSlot(${i}, 1)" ${i===slots.length-1?'disabled':''}>▼</button>
+        </div>
+        <input type="checkbox" ${slot.visible?'checked':''} onchange="toggleSlot(${slot.id})"
+          style="width:14px;height:14px;accent-color:#e05a1e;cursor:pointer;">
+        <span style="font-size:12px;font-weight:700;flex:1;color:#333;">スロット ${i+1}</span>
+        <button class="slot-del" onclick="deleteSlot(${slot.id})">×</button>
+      </div>
+      <div class="slot-fields">
+        <input type="text" value="${esc(slot.text)}" placeholder="メインテキスト"
+          oninput="updateSlot(${slot.id},'text',this.value)">
+        <input type="text" value="${esc(slot.sub)}"  placeholder="サブテキスト（任意）"
+          oninput="updateSlot(${slot.id},'sub',this.value)">
+      </div>`;
+    list.appendChild(div);
+  });
+
+  const addBtn = document.getElementById('btn-add-slot');
+  if (addBtn) addBtn.disabled = slots.length >= 3;
+}
+
+function esc(str) { return (str||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+function addSlot() {
+  if (slots.length >= 3) return;
+  slots.push({ id:nextSlotId++, text:'', sub:'', visible:true });
+  buildSlotList(); renderHeader();
+}
+function deleteSlot(id) {
+  slots = slots.filter(s => s.id !== id);
+  buildSlotList(); renderHeader();
+}
+function toggleSlot(id) {
+  const s = slots.find(s => s.id === id);
+  if (s) { s.visible = !s.visible; buildSlotList(); renderHeader(); }
+}
+function moveSlot(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= slots.length) return;
+  [slots[i], slots[j]] = [slots[j], slots[i]];
+  buildSlotList(); renderHeader();
+}
+function updateSlot(id, field, val) {
+  const s = slots.find(s => s.id === id);
+  if (s) { s[field] = val; renderHeader(); }
+}
+
+/* ══════════════════════════════════════
+   プリセット画像
+══════════════════════════════════════ */
+const PRESETS = [
+  { label:'青空', draw(c) {
+      const cx=c.getContext('2d');
+      const g=cx.createLinearGradient(0,0,0,c.height);
+      g.addColorStop(0,'#5ab4e8'); g.addColorStop(1,'#cceeff');
+      cx.fillStyle=g; cx.fillRect(0,0,c.width,c.height);
+      cx.fillStyle='rgba(255,255,255,0.82)';
+      [[0.18,0.26,20,9],[0.45,0.20,25,10],[0.72,0.30,17,8]].forEach(([rx,ry,a,b])=>{
+        cx.beginPath(); cx.ellipse(c.width*rx,c.height*ry,a,b,0,0,Math.PI*2); cx.fill();
+      });
+  }},
+  { label:'夕焼け', draw(c) {
+      const cx=c.getContext('2d');
+      const g=cx.createLinearGradient(0,0,0,c.height);
+      g.addColorStop(0,'#e8502a'); g.addColorStop(0.5,'#f5b97a'); g.addColorStop(1,'#fde9b0');
+      cx.fillStyle=g; cx.fillRect(0,0,c.width,c.height);
+  }},
+  { label:'シンプル', draw(c) {
+      const cx=c.getContext('2d');
+      cx.fillStyle='#eef2f5'; cx.fillRect(0,0,c.width,c.height);
+      cx.strokeStyle='#ccd4dc'; cx.lineWidth=1;
+      for(let y=0;y<c.height;y+=14){cx.beginPath();cx.moveTo(0,y);cx.lineTo(c.width,y);cx.stroke();}
+  }},
+];
+
+function buildPresets() {
+  const cont = document.getElementById('preset-images');
+  if (!cont) return;
+  cont.innerHTML = '';
+  PRESETS.forEach((p, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'preset-thumb' + (i===0?' sel':'');
+    wrap.onclick = () => selectPreset(i);
+    const tc = document.createElement('canvas');
+    tc.width = 100; tc.height = 100;
+    p.draw(tc);
+    wrap.appendChild(tc);
+    const lbl = document.createElement('div');
+    lbl.className = 'plbl'; lbl.textContent = p.label;
+    wrap.appendChild(lbl);
+    cont.appendChild(wrap);
+  });
+}
+
+function selectPreset(i) {
+  selectedPreset = i; customImage = null;
+  document.querySelectorAll('.preset-thumb').forEach((el,idx) => el.classList.toggle('sel', idx===i));
+  renderHeader();
+}
+
+function loadUploadedImage(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => { customImage = img; renderHeader(); };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ══════════════════════════════════════
+   パターン2：ヘッダー描画
+══════════════════════════════════════ */
+function renderHeader() {
+  const headerText = (document.getElementById('header-text').value || 'ヘッダーテキスト');
+  const hBg   = document.getElementById('h-bg').value;
+  const hText = document.getElementById('h-text').value;
+
+  ctx.clearRect(0, 0, SIZE, SIZE);
+
+  const HDR_H = Math.floor(SIZE / 4);
+  const imgH  = SIZE - HDR_H;
+
+  // ベース画像
+  if (customImage) {
+    const img = customImage;
+    const sc  = Math.max(SIZE/img.width, imgH/img.height);
+    const iw  = img.width*sc, ih = img.height*sc;
+    ctx.drawImage(img, (SIZE-iw)/2, HDR_H+(imgH-ih)/2, iw, ih);
+  } else {
+    const tc = document.createElement('canvas');
+    tc.width = SIZE; tc.height = imgH;
+    PRESETS[selectedPreset].draw(tc);
+    ctx.drawImage(tc, 0, HDR_H);
+  }
+
+  // ヘッダー帯
+  ctx.fillStyle = hBg;
+  ctx.fillRect(0, 0, SIZE, HDR_H);
+  ctx.fillStyle = '#e05a1e';
+  ctx.fillRect(0, HDR_H-2, SIZE, 2);
+
+  // ヘッダーテキスト（枠内最大サイズ）
+  const maxH = HDR_H * 0.72;
+  let hfs = Math.floor(maxH * 0.85);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.font = `700 ${hfs}px "Noto Sans JP"`;
+  while ((ctx.measureText(headerText).width > SIZE-10 || hfs > maxH) && hfs > 6) {
+    hfs--; ctx.font = `700 ${hfs}px "Noto Sans JP"`;
+  }
+  ctx.fillStyle = hText;
+  ctx.fillText(headerText, SIZE/2, HDR_H/2);
+
+  // スロット描画なし：ベース画像がそのまま下部を埋める
+  ctx.textBaseline = 'alphabetic';
+}
+
+/* ══════════════════════════════════════
+   7セグメント描画
+══════════════════════════════════════ */
+/*
+    -a-
+   f   b
+    -g-
+   e   c
+    -d-
+  segs = [a,b,c,d,e,f,g]
+*/
+const SEG = {
+  '0':[1,1,1,1,1,1,0],
+  '1':[0,1,1,0,0,0,0],
+  '2':[1,1,0,1,1,0,1],
+  '3':[1,1,1,1,0,0,1],
+  '4':[0,1,1,0,0,1,1],
+  '5':[1,0,1,1,0,1,1],
+  '6':[1,0,1,1,1,1,1],
+  '7':[1,1,1,0,0,0,0],
+  '8':[1,1,1,1,1,1,1],
+  '9':[1,1,1,1,0,1,1],
+  '-':[0,0,0,0,0,0,1],
+};
+
+function draw7seg(ctx, str, rightX, topY, height, onCol, offCol) {
+  const W = height * 0.52;
+  const T = Math.max(1, height * 0.09);
+  const G = height * 0.10;
+  let   cx = rightX;
+
+  str.split('').reverse().forEach(ch => {
+    const segs = SEG[ch] || SEG['-'];
+    const x0   = cx - W;
+
+    // ゴースト（消灯）
+    ctx.globalAlpha = 0.12;
+    drawGlyph(ctx, [1,1,1,1,1,1,1], x0, topY, W, height, T, offCol);
+    ctx.globalAlpha = 1.0;
+
+    // 点灯
+    drawGlyph(ctx, segs, x0, topY, W, height, T, onCol);
+
+    cx -= W + G;
+  });
+}
+
+function drawGlyph(ctx, segs, x, y, W, H, T, col) {
+  ctx.fillStyle = col;
+  const hH = H/2;
+  const P  = T * 0.55;
+
+  function hbar(bx, by) {
+    const len = W - P*2;
+    if (len <= 0) return;
+    const h = T/2;
+    ctx.beginPath();
+    ctx.moveTo(bx+P+h,   by-h);
+    ctx.lineTo(bx+P+len-h, by-h);
+    ctx.lineTo(bx+P+len,   by);
+    ctx.lineTo(bx+P+len-h, by+h);
+    ctx.lineTo(bx+P+h,   by+h);
+    ctx.lineTo(bx+P,     by);
+    ctx.closePath(); ctx.fill();
+  }
+  function vbar(bx, by) {
+    const len = hH - P*2;
+    if (len <= 0) return;
+    const h = T/2;
+    ctx.beginPath();
+    ctx.moveTo(bx-h, by+P+h);
+    ctx.lineTo(bx-h, by+P+len-h);
+    ctx.lineTo(bx,   by+P+len);
+    ctx.lineTo(bx+h, by+P+len-h);
+    ctx.lineTo(bx+h, by+P+h);
+    ctx.lineTo(bx,   by+P);
+    ctx.closePath(); ctx.fill();
+  }
+
+  if (segs[0]) hbar(x,   y);       // a top
+  if (segs[1]) vbar(x+W, y);       // b top-right
+  if (segs[2]) vbar(x+W, y+hH);    // c bot-right
+  if (segs[3]) hbar(x,   y+H);     // d bottom
+  if (segs[4]) vbar(x,   y+hH);    // e bot-left
+  if (segs[5]) vbar(x,   y);       // f top-left
+  if (segs[6]) hbar(x,   y+hH);    // g middle
+}
+
+/* ══════════════════════════════════════
+   ユーティリティ
+══════════════════════════════════════ */
+function rrect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.lineTo(x+w-r, y);   ctx.quadraticCurveTo(x+w, y,   x+w, y+r);
+  ctx.lineTo(x+w, y+h-r); ctx.quadraticCurveTo(x+w, y+h, x+w-r, y+h);
+  ctx.lineTo(x+r, y+h);   ctx.quadraticCurveTo(x,   y+h, x,   y+h-r);
+  ctx.lineTo(x,   y+r);   ctx.quadraticCurveTo(x,   y,   x+r, y);
+  ctx.closePath();
+}
+
+function downloadImage() {
+  // 一時canvasにSAMPLE透かしを合成
+  const tmp = document.createElement('canvas');
+  tmp.width  = SIZE;
+  tmp.height = SIZE;
+  const tc = tmp.getContext('2d');
+
+  // 元の画像をコピー
+  tc.drawImage(canvas, 0, 0);
+
+  // 斜め半透明オーバーレイ
+  tc.save();
+  tc.translate(SIZE/2, SIZE/2);
+  tc.rotate(-Math.PI / 5);
+
+  // SAMPLE テキスト
+  const fs = Math.floor(SIZE * 0.22);
+  tc.font      = `900 ${fs}px sans-serif`;
+  tc.textAlign    = 'center';
+  tc.textBaseline = 'middle';
+
+  // 縁取り
+  tc.strokeStyle = 'rgba(255,255,255,0.55)';
+  tc.lineWidth   = fs * 0.12;
+  tc.lineJoin    = 'round';
+  tc.strokeText('SAMPLE', 0, 0);
+
+  // 塗り
+  tc.fillStyle = 'rgba(180,30,30,0.52)';
+  tc.fillText('SAMPLE', 0, 0);
+
+  tc.restore();
+
+  // ダウンロード
+  const link = document.createElement('a');
+  link.download = `gasstation_${currentTab}_sample_${new Date().toISOString().slice(0,10)}.png`;
+  link.href = tmp.toDataURL('image/png');
+  link.click();
+}
+
+/* ══════════════════════════════════════
+   初期化
+══════════════════════════════════════ */
+window.addEventListener('load', () => {
+  buildFuelList();
+  buildPresets();
+  renderPrice();
+
+  // Service Worker 登録
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js').catch(e => console.warn('SW:', e));
+  }
+
+  // インストールバナー（Android Chrome）
+  let deferredPrompt = null;
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    deferredPrompt = e;
+    document.getElementById('install-banner').style.display = 'flex';
+  });
+  document.getElementById('btn-install').addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt = null;
+    document.getElementById('install-banner').style.display = 'none';
+  });
+  document.getElementById('btn-install-close').addEventListener('click', () => {
+    document.getElementById('install-banner').style.display = 'none';
+  });
+
+  // iOS向け案内（Safariでまだインストールしていない場合）
+  const isIos = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
+  const isInStandalone = window.navigator.standalone === true;
+  if (isIos && !isInStandalone) {
+    document.getElementById('ios-banner').style.display = 'flex';
+    document.getElementById('btn-ios-close').addEventListener('click', () => {
+      document.getElementById('ios-banner').style.display = 'none';
+    });
+  }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "ガソリンスタンド 画像生成ツール",
+  "short_name": "GS画像生成",
+  "description": "燃料価格表示・ヘッダー画像を生成するツール",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f4f0",
+  "theme_color": "#1a1a2e",
+  "orientation": "portrait",
+  "lang": "ja",
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
