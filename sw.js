@@ -40,3 +40,10 @@ self.addEventListener('fetch', e => {
     })
   );
 });
+
+// メインスレッドからの更新指示を受け取る
+self.addEventListener('message', e => {
+  if (e.data && e.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
+});
