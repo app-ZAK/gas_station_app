@@ -130,6 +130,18 @@ canvas{width:100%;max-width:480px;aspect-ratio:1;border-radius:6px;box-shadow:0 
 }
 .btn-dl{display:block;width:calc(100% - 36px);margin:0 18px 18px;padding:12px;background:#1a1a2e;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;text-align:center;transition:background .15s;}
 .btn-dl:active{background:#2d2d4e;}
+
+/* プレビュータブ */
+.ptab{
+  padding:8px 14px;border:none;background:none;
+  font-family:inherit;font-size:12px;font-weight:700;
+  color:#888;cursor:pointer;white-space:nowrap;
+  border-bottom:2px solid transparent;transition:all .15s;
+  flex-shrink:0;
+}
+.ptab.active{color:#1a1a2e;border-bottom:2px solid #e05a1e;}
+#preview-tab-nav::-webkit-scrollbar{height:3px;}
+#preview-tab-nav::-webkit-scrollbar-thumb{background:#ddd;border-radius:2px;}
 </style>
 </head>
 <body>
@@ -291,10 +303,19 @@ canvas{width:100%;max-width:480px;aspect-ratio:1;border-radius:6px;box-shadow:0 
         <h2>プレビュー（192 × 192 px）</h2>
         <span style="font-size:11px;color:#aaa;">出力サイズ 192px</span>
       </div>
+      <!-- プレビュータブ -->
+      <div id="preview-tab-nav" style="display:flex;overflow-x:auto;border-bottom:1px solid #e0e0dc;background:#fafafa;">
+        <button id="ptab-all" class="ptab active" onclick="switchPreviewTab('all')">全体</button>
+      </div>
       <div class="canvas-wrap">
         <canvas id="main-canvas" width="192" height="192"></canvas>
       </div>
-      <button class="btn-dl" onclick="downloadImage()">PNG でダウンロード</button>
+      <!-- 現在表示中の油種名 -->
+      <div id="preview-tab-label" style="display:none;text-align:center;font-size:11px;font-weight:700;color:#888;padding:4px 0 0;"></div>
+      <!-- ダウンロードボタン -->
+      <div style="padding:10px 18px 16px;display:flex;flex-direction:column;gap:8px;">
+        <button class="btn-dl" id="btn-dl-current" onclick="downloadCurrent()">PNG でダウンロード</button>
+      </div>
     </div>
   </div>
 
@@ -368,6 +389,8 @@ function switchTab(tab) {
   document.getElementById('tab-price').classList.toggle('active', tab==='price');
   document.getElementById('tab-header').classList.toggle('active', tab==='header');
   tab === 'price' ? renderPrice() : renderHeader();
+  currentPreviewTab = 'all';
+  updatePreviewTabs();
 }
 
 /* ══════════════════════════════════════
@@ -377,11 +400,9 @@ function setCount(n, btn) {
   fuelCount = n;
   document.querySelectorAll('#cnt3,#cnt4').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-
   if (n === 4) {
     fuelDefs.forEach(f => f.visible = true);
   } else {
-    // 3種に切り替え：visible が3を超えていたら後ろから削る
     let vis = fuelDefs.filter(f => f.visible);
     while (vis.length > 3) {
       for (let k = fuelDefs.length-1; k >= 0; k--) {
@@ -389,15 +410,15 @@ function setCount(n, btn) {
       }
       vis = fuelDefs.filter(f => f.visible);
     }
-    // 1種しかなければ先頭3つをvisibleにする
     if (vis.length < 3) {
       let added = 0;
       fuelDefs.forEach(f => { if (!f.visible && added < 3-vis.length) { f.visible=true; added++; } });
     }
   }
-
+  currentPreviewTab = 'all';
   buildFuelList();
   renderPrice();
+  updatePreviewTabs();
 }
 
 function buildFuelList() {
@@ -445,11 +466,12 @@ function buildFuelList() {
 
 function toggleFuel(i) {
   const visCount = fuelDefs.filter(f => f.visible).length;
-  // チェックONにしようとして3件を超える場合は何もしない
   if (!fuelDefs[i].visible && visCount >= 3) return;
   fuelDefs[i].visible = !fuelDefs[i].visible;
+  currentPreviewTab = 'all';
   buildFuelList();
   renderPrice();
+  updatePreviewTabs();
 }
 
 function moveFuel(i, dir) {
@@ -458,6 +480,7 @@ function moveFuel(i, dir) {
   [fuelDefs[i], fuelDefs[j]] = [fuelDefs[j], fuelDefs[i]];
   buildFuelList();
   renderPrice();
+  updatePreviewTabs();
 }
 
 /* ══════════════════════════════════════
@@ -536,6 +559,28 @@ function renderPrice() {
   const cardH  = Math.floor((totalH - GAP*(n-1)) / n);
   const cardW  = SIZE - PAD*2;
 
+  // 全油種で最大桁数を先に計算してセグサイズを統一
+  const maxDigits = Math.max(...active.map(f => {
+    const p = (f.price !== undefined && f.price !== null && f.price !== '') ? String(f.price) : '---';
+    return p.length;
+  }));
+
+  // 左側エリア幅の最大値も先に求める（全カードで揃える）
+  const lblFs0  = Math.max(5, Math.min(cardH * 0.28, 10));
+  const unitFs0 = Math.max(4, Math.min(cardH * 0.20, 7));
+  let maxLeftW = 0;
+  active.forEach(f => {
+    ctx.font = `700 ${lblFs0}px "Noto Sans JP"`;
+    const lw = ctx.measureText(f.label).width;
+    ctx.font = `400 ${unitFs0}px "Noto Sans JP"`;
+    const uw = ctx.measureText(f.unit).width;
+    maxLeftW = Math.max(maxLeftW, lw, uw);
+  });
+  const unifiedLeftW = maxLeftW + 10;
+  const unifiedSegMaxW = cardW - unifiedLeftW - 6;
+  const unifiedSegMaxH = cardH * 0.88;
+  const unifiedSegH = Math.min(unifiedSegMaxH, unifiedSegMaxW / (maxDigits * 0.62 + (maxDigits-1) * 0.10));
+
   active.forEach((f, i) => {
     const cx = PAD;
     const cy = topY + i*(cardH + GAP);
@@ -546,24 +591,13 @@ function renderPrice() {
     rrect(ctx, cx, cy, cardW, cardH, 3);
     ctx.fill();
 
-    // 油種名・単位エリア（左側）を先に確定
-    const lblFs  = Math.max(5, Math.min(cardH * 0.28, 10));
-    const unitFs = Math.max(4, Math.min(cardH * 0.20, 7));
-    ctx.font = `700 ${lblFs}px "Noto Sans JP"`;
-    const lblW  = ctx.measureText(f.label).width;
-    ctx.font = `400 ${unitFs}px "Noto Sans JP"`;
-    const unitW = ctx.measureText(f.unit).width;
-    const leftW = Math.max(lblW, unitW) + 10; // 油種エリア幅（余白込み）
+    const lblFs  = lblFs0;
+    const unitFs = unitFs0;
 
-    // 7セグ価格：残り幅いっぱい・縦もカード高さいっぱいまで
-    const segMaxW = cardW - leftW - 6;
-    const segMaxH = cardH * 0.88;
-    // 桁数から横幅に収まる高さを計算（1桁あたり幅 ≒ height * 0.62）
-    const digits  = priceStr.length;
-    const segH    = Math.min(segMaxH, segMaxW / (digits * 0.62 + (digits-1) * 0.10));
-    const segTop  = cy + (cardH - segH) / 2;
+    // 7セグ価格（統一サイズ）
+    const segTop    = cy + (cardH - unifiedSegH) / 2;
     const segRightX = cx + cardW - 3;
-    draw7seg(ctx, priceStr, segRightX, segTop, segH, s.text, s.card);
+    draw7seg(ctx, priceStr, segRightX, segTop, unifiedSegH, s.text, s.card);
 
     // 油種名（左・縦中央上寄り）
     ctx.font         = `700 ${lblFs}px "Noto Sans JP"`;
@@ -865,45 +899,207 @@ function rrect(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-function downloadImage() {
-  // 一時canvasにSAMPLE透かしを合成
+/* ══════════════════════════════════════
+   プレビュータブ管理
+══════════════════════════════════════ */
+let currentPreviewTab = 'all'; // 'all' or 燃料インデックス番号(0,1,2...)
+
+function updatePreviewTabs() {
+  const nav = document.getElementById('preview-tab-nav');
+  if (!nav) return;
+
+  // パターン2はタブなし
+  if (currentTab !== 'price') {
+    nav.style.display = 'none';
+    document.getElementById('preview-tab-label').style.display = 'none';
+    return;
+  }
+  nav.style.display = 'flex';
+
+  const active = fuelCount === 4
+    ? fuelDefs.slice()
+    : fuelDefs.filter(f => f.visible);
+
+  // タブを再構築
+  nav.innerHTML = '';
+
+  // 全体タブ
+  const allBtn = document.createElement('button');
+  allBtn.className = 'ptab' + (currentPreviewTab === 'all' ? ' active' : '');
+  allBtn.textContent = '全体';
+  allBtn.onclick = () => switchPreviewTab('all');
+  nav.appendChild(allBtn);
+
+  // 油種タブ
+  active.forEach((f, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'ptab' + (currentPreviewTab === i ? ' active' : '');
+    btn.innerHTML = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${f.color};margin-right:5px;vertical-align:middle;"></span>${f.label}`;
+    btn.onclick = () => switchPreviewTab(i);
+    nav.appendChild(btn);
+  });
+
+  // 現在のプレビュータブが範囲外になった場合はallに戻す
+  if (currentPreviewTab !== 'all' && currentPreviewTab >= active.length) {
+    currentPreviewTab = 'all';
+  }
+
+  renderCurrentPreview();
+}
+
+function switchPreviewTab(tab) {
+  currentPreviewTab = tab;
+  updatePreviewTabs();
+}
+
+function renderCurrentPreview() {
+  if (currentTab !== 'price' || currentPreviewTab === 'all') {
+    // 全体表示 or パターン2
+    document.getElementById('preview-tab-label').style.display = 'none';
+    if (currentTab === 'price') renderPrice();
+    else renderHeader();
+    return;
+  }
+  // 油種単体プレビュー
+  const active = fuelCount === 4
+    ? fuelDefs.slice()
+    : fuelDefs.filter(f => f.visible);
+  const f = active[currentPreviewTab];
+  if (!f) { renderPrice(); return; }
+
+  const label = document.getElementById('preview-tab-label');
+  label.style.display = 'block';
+  label.style.color = f.color;
+  label.textContent = f.label + ' 単体プレビュー';
+
+  renderSingleFuel(ctx, f);
+}
+
+/* 単体燃料をメインcanvasに描画 */
+function renderSingleFuel(tc, f) {
+  const sKey = document.getElementById('price-style').value;
+  const s    = STYLES[sKey];
+
+  tc.clearRect(0, 0, SIZE, SIZE);
+  tc.fillStyle = s.bg;
+  tc.fillRect(0, 0, SIZE, SIZE);
+  if (sKey === 'dark' || sKey === 'navy') {
+    tc.fillStyle = 'rgba(255,255,255,0.045)';
+    for (let gy = 5; gy < SIZE; gy += 10)
+      for (let gx = 5; gx < SIZE; gx += 10)
+        tc.fillRect(gx, gy, 1, 1);
+  }
+
+  const HDR_H  = Math.floor(SIZE / 4);
+  const hdrBg  = document.getElementById('hdr-bg').value;
+  const hdrCol = document.getElementById('hdr-text-color').value;
+  const hdrFnt = document.getElementById('hdr-font').value;
+  const title  = (document.getElementById('price-title').value || '本日のガソリン価格').trim();
+
+  tc.fillStyle = hdrBg;
+  tc.fillRect(0, 0, SIZE, HDR_H);
+  tc.textAlign = 'center'; tc.textBaseline = 'middle';
+  const maxH = HDR_H * 0.72;
+  let tfs = Math.floor(maxH * 0.85);
+  tc.font = `700 ${tfs}px ${hdrFnt}`;
+  while ((tc.measureText(title).width > SIZE-10 || tfs > maxH) && tfs > 6) {
+    tfs--; tc.font = `700 ${tfs}px ${hdrFnt}`;
+  }
+  tc.fillStyle = hdrCol;
+  tc.fillText(title, SIZE/2, HDR_H/2);
+  tc.fillStyle = hdrCol + '55';
+  tc.fillRect(0, HDR_H-1, SIZE, 1);
+
+  const PAD   = 4;
+  const cardW = SIZE - PAD*2;
+  const cardH = SIZE - HDR_H - PAD*2;
+  const cx    = PAD;
+  const cy    = HDR_H + PAD;
+  const priceStr = (f.price !== undefined && f.price !== null && f.price !== '') ? String(f.price) : '---';
+
+  tc.fillStyle = s.card;
+  rrect(tc, cx, cy, cardW, cardH, 3);
+  tc.fill();
+
+  const lblFs  = Math.max(5, Math.min(cardH * 0.28, 10));
+  const unitFs = Math.max(4, Math.min(cardH * 0.20, 7));
+
+  // 全油種の最大桁数でセグサイズを統一（全体プレビューと揃える）
+  const allActive = fuelCount === 4 ? fuelDefs.slice() : fuelDefs.filter(f => f.visible);
+  const maxDigits = Math.max(...allActive.map(f => {
+    const p = (f.price !== undefined && f.price !== null && f.price !== '') ? String(f.price) : '---';
+    return p.length;
+  }));
+  let maxLeftW = 0;
+  allActive.forEach(af => {
+    tc.font = `700 ${lblFs}px "Noto Sans JP"`;
+    const lw = tc.measureText(af.label).width;
+    tc.font = `400 ${unitFs}px "Noto Sans JP"`;
+    const uw = tc.measureText(af.unit).width;
+    maxLeftW = Math.max(maxLeftW, lw, uw);
+  });
+  const leftW   = maxLeftW + 10;
+  const segMaxW = cardW - leftW - 6;
+  const segMaxH = cardH * 0.88;
+  const segH    = Math.min(segMaxH, segMaxW / (maxDigits * 0.62 + (maxDigits-1) * 0.10));
+  draw7seg(tc, priceStr, cx+cardW-3, cy+(cardH-segH)/2, segH, s.text, s.card);
+
+  tc.font = `700 ${lblFs}px "Noto Sans JP"`;
+  tc.fillStyle = f.color; tc.textAlign = 'left'; tc.textBaseline = 'middle';
+  tc.fillText(f.label, cx+5, cy + cardH*0.36);
+  tc.font = `400 ${unitFs}px "Noto Sans JP"`;
+  tc.fillStyle = s.sub;
+  tc.fillText(f.unit, cx+5, cy + cardH*0.70);
+  tc.textBaseline = 'alphabetic';
+}
+
+/* ══════════════════════════════════════
+   ダウンロード
+══════════════════════════════════════ */
+function downloadCurrent() {
   const tmp = document.createElement('canvas');
-  tmp.width  = SIZE;
-  tmp.height = SIZE;
-  const tc = tmp.getContext('2d');
+  tmp.width = SIZE; tmp.height = SIZE;
+  const tc  = tmp.getContext('2d');
 
-  // 元の画像をコピー
-  tc.drawImage(canvas, 0, 0);
+  if (currentTab !== 'price' || currentPreviewTab === 'all') {
+    tc.drawImage(canvas, 0, 0);
+  } else {
+    const active = fuelCount === 4 ? fuelDefs.slice() : fuelDefs.filter(f => f.visible);
+    const f = active[currentPreviewTab];
+    if (f) renderSingleFuel(tc, f);
+  }
 
-  // 斜め半透明オーバーレイ
+  addSampleWatermark(tc);
+
+  const active = fuelCount === 4 ? fuelDefs.slice() : fuelDefs.filter(f => f.visible);
+  const f = (currentTab === 'price' && currentPreviewTab !== 'all') ? active[currentPreviewTab] : null;
+  const name = f ? `gasstation_${f.label}_sample` : `gasstation_${currentTab}_sample`;
+  const link = document.createElement('a');
+  link.download = `${name}_${new Date().toISOString().slice(0,10)}.png`;
+  link.href = tmp.toDataURL('image/png');
+  link.click();
+}
+
+function downloadImage() { downloadCurrent(); }
+
+/* SAMPLEウォーターマーク共通関数 */
+function addSampleWatermark(tc) {
   tc.save();
   tc.translate(SIZE/2, SIZE/2);
   tc.rotate(-Math.PI / 5);
-
-  // SAMPLE テキスト
   const fs = Math.floor(SIZE * 0.22);
-  tc.font      = `900 ${fs}px sans-serif`;
-  tc.textAlign    = 'center';
-  tc.textBaseline = 'middle';
-
-  // 縁取り
+  tc.font = `900 ${fs}px sans-serif`;
+  tc.textAlign = 'center'; tc.textBaseline = 'middle';
   tc.strokeStyle = 'rgba(255,255,255,0.55)';
   tc.lineWidth   = fs * 0.12;
   tc.lineJoin    = 'round';
   tc.strokeText('SAMPLE', 0, 0);
-
-  // 塗り
   tc.fillStyle = 'rgba(180,30,30,0.52)';
   tc.fillText('SAMPLE', 0, 0);
-
   tc.restore();
-
-  // ダウンロード
-  const link = document.createElement('a');
-  link.download = `gasstation_${currentTab}_sample_${new Date().toISOString().slice(0,10)}.png`;
-  link.href = tmp.toDataURL('image/png');
-  link.click();
 }
+
+/* 油種別ダウンロードボタンを更新 */
 
 /* ══════════════════════════════════════
    初期化
@@ -912,6 +1108,7 @@ window.addEventListener('load', () => {
   buildFuelList();
   buildPresets();
   renderPrice();
+  updatePreviewTabs();
 
   // Service Worker 登録
   if ('serviceWorker' in navigator) {
