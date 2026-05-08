@@ -579,21 +579,38 @@ function renderPrice() {
     return p.length;
   }));
 
-  // 左側エリア幅の最大値も先に求める（全カードで揃える）
-  const lblFs0  = Math.max(5, Math.min(cardH * 0.28, 10));
-  const unitFs0 = Math.max(4, Math.min(cardH * 0.20, 7));
-  let maxLeftW = 0;
-  active.forEach(f => {
+  const unitFs0 = Math.floor(cardH * 0.18);
+
+  // カード幅を固定分割：左45%=油種エリア、右55%=数字＋単位エリア
+  const leftAreaW  = Math.floor(cardW * 0.45);
+  const rightAreaW = cardW - leftAreaW;
+
+  // 単位の最大幅を計算
+  ctx.font = `400 ${unitFs0}px "Noto Sans JP"`;
+  const maxUnitW = Math.max(...active.map(f => ctx.measureText(f.unit).width)) + 4;
+
+  // 数字サイズ：3種=42px固定、4種=40px固定（どちらも桁数で縮小しない）
+  const numAreaW = rightAreaW - maxUnitW - 6;
+  const priceFs = (n === 4) ? 40 : 42;
+
+  // 油種名サイズ：左エリアに収まる最大サイズ（上限55%）
+  let lblFs0 = Math.floor(cardH * 0.55);
+  while (lblFs0 > 6) {
     ctx.font = `700 ${lblFs0}px "Noto Sans JP"`;
-    const lw = ctx.measureText(f.label).width;
-    ctx.font = `400 ${unitFs0}px "Noto Sans JP"`;
-    const uw = ctx.measureText(f.unit).width;
-    maxLeftW = Math.max(maxLeftW, lw, uw);
-  });
-  const unifiedLeftW = maxLeftW + 10;
-  const unifiedSegMaxW = cardW - unifiedLeftW - 6;
-  const unifiedSegMaxH = cardH * 0.88;
-  const unifiedSegH = Math.min(unifiedSegMaxH, unifiedSegMaxW / (maxDigits * 0.62 + (maxDigits-1) * 0.10));
+    const maxW = Math.max(...active.map(f => ctx.measureText(f.label).width));
+    if (maxW <= leftAreaW - 2) break;
+    lblFs0--;
+  }
+
+  // 油種名の実際の最大幅を計測してscaleXで圧縮率を計算
+  ctx.font = `700 ${lblFs0}px "Noto Sans JP"`;
+  const maxLabelNaturalW = Math.max(...active.map(f => ctx.measureText(f.label).width));
+  // 左端2pxに寄せて、左エリア幅いっぱいに収まるよう横圧縮
+  const lblScaleX = maxLabelNaturalW > leftAreaW - 2
+    ? (leftAreaW - 2) / maxLabelNaturalW
+    : 1.0;
+
+  const unifiedLeftW = leftAreaW;
 
   active.forEach((f, i) => {
     const cx = PAD;
@@ -605,25 +622,31 @@ function renderPrice() {
     rrect(ctx, cx, cy, cardW, cardH, 3);
     ctx.fill();
 
-    const lblFs  = lblFs0;
-    const unitFs = unitFs0;
+    // 価格（等幅Impact・右寄せ）
+    ctx.font = `${priceFs}px Impact, "Arial Narrow", sans-serif`;
+    const cellWp       = ctx.measureText('0').width * 1.05;
+    const totalPriceW  = cellWp * priceStr.length;
+    const priceRightX  = cx + cardW - maxUnitW - 4;
+    const priceCenterX = priceRightX - totalPriceW / 2;
+    drawMonoPrice(ctx, priceStr, priceCenterX, cy + cardH * 0.52, priceFs, s.text);
 
-    // 7セグ価格（統一サイズ）
-    const segTop    = cy + (cardH - unifiedSegH) / 2;
-    const segRightX = cx + cardW - 3;
-    draw7seg(ctx, priceStr, segRightX, segTop, unifiedSegH, s.text, s.card);
-
-    // 油種名（左・縦中央上寄り）
-    ctx.font         = `700 ${lblFs}px "Noto Sans JP"`;
+    // 油種名（左端・縦中央・横圧縮で収める）
+    ctx.save();
+    ctx.font         = `700 ${lblFs0}px "Noto Sans JP"`;
     ctx.fillStyle    = f.color;
     ctx.textAlign    = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText(f.label, cx+5, cy + cardH * 0.36);
+    ctx.translate(cx + 2, cy + cardH * 0.50);
+    ctx.scale(lblScaleX, 1);
+    ctx.fillText(f.label, 0, 0);
+    ctx.restore();
 
-    // 単位（左・縦中央下寄り）
-    ctx.font         = `400 ${unitFs}px "Noto Sans JP"`;
+    // 単位（数字の右下）
+    ctx.font         = `400 ${unitFs0}px "Noto Sans JP"`;
     ctx.fillStyle    = s.sub;
-    ctx.fillText(f.unit, cx+5, cy + cardH * 0.70);
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'bottom';
+    ctx.fillText(f.unit, priceRightX + 4, cy + cardH * 0.88);
   });
 
   ctx.textBaseline = 'alphabetic';
@@ -903,6 +926,34 @@ function drawGlyph(ctx, segs, x, y, W, H, T, col) {
 /* ══════════════════════════════════════
    ユーティリティ
 ══════════════════════════════════════ */
+/* ══════════════════════════════════════
+   等幅Impact数字描画
+   各桁を同じセル幅に区切って中央揃えで描画することで
+   数字ごとの幅差をなくし上下で位置を揃える
+══════════════════════════════════════ */
+function drawMonoPrice(tc, priceStr, centerX, midY, fontSize, color, fixedDigits) {
+  tc.font = `${fontSize}px Impact, "Arial Narrow", sans-serif`;
+  tc.fillStyle    = color;
+  tc.textAlign    = 'center';
+  tc.textBaseline = 'middle';
+
+  const cellW  = tc.measureText('0').width * 1.05;
+  const digits = priceStr.split('');
+
+  // 実際の桁数の幅を中央に配置（fixedDigitsは無視して実桁数基準）
+  const actualW = cellW * digits.length;
+  const startX  = centerX - actualW / 2;
+
+  digits.forEach((ch, i) => {
+    const x = startX + i * cellW + cellW / 2;
+    tc.fillText(ch, x, midY);
+  });
+
+  // 数字エリアの右端を返す（単位位置の計算に使う）
+  const rightX = startX + actualW;
+  return { startX, totalW: actualW, cellW, rightX };
+}
+
 function rrect(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x+r, y);
@@ -1035,35 +1086,51 @@ function renderSingleFuel(tc, f) {
   rrect(tc, cx, cy, cardW, cardH, 3);
   tc.fill();
 
-  const lblFs  = Math.max(5, Math.min(cardH * 0.28, 10));
-  const unitFs = Math.max(4, Math.min(cardH * 0.20, 7));
+  // 上段（油種名）：カード高さの上28%
+  const topRowH = Math.floor(cardH * 0.28);
+  // 下段（数字）：残り72%
+  const btmRowH = cardH - topRowH;
+  const btmY    = cy + topRowH;
 
-  // 全油種の最大桁数でセグサイズを統一（全体プレビューと揃える）
-  const allActive = fuelCount === 4 ? fuelDefs.slice() : fuelDefs.filter(f => f.visible);
-  const maxDigits = Math.max(...allActive.map(f => {
-    const p = (f.price !== undefined && f.price !== null && f.price !== '') ? String(f.price) : '---';
-    return p.length;
-  }));
-  let maxLeftW = 0;
-  allActive.forEach(af => {
+  // ── 油種名：横幅いっぱいの最大サイズ × 0.90（10%小さく）──
+  let lblFs = Math.floor(topRowH * 0.85 * 0.90);
+  while (lblFs > 6) {
     tc.font = `700 ${lblFs}px "Noto Sans JP"`;
-    const lw = tc.measureText(af.label).width;
-    tc.font = `400 ${unitFs}px "Noto Sans JP"`;
-    const uw = tc.measureText(af.unit).width;
-    maxLeftW = Math.max(maxLeftW, lw, uw);
-  });
-  const leftW   = maxLeftW + 10;
-  const segMaxW = cardW - leftW - 6;
-  const segMaxH = cardH * 0.88;
-  const segH    = Math.min(segMaxH, segMaxW / (maxDigits * 0.62 + (maxDigits-1) * 0.10));
-  draw7seg(tc, priceStr, cx+cardW-3, cy+(cardH-segH)/2, segH, s.text, s.card);
+    if (tc.measureText(f.label).width <= cardW - 8 && lblFs <= topRowH * 0.90 * 0.90) break;
+    lblFs--;
+  }
+  tc.font         = `700 ${lblFs}px "Noto Sans JP"`;
+  tc.fillStyle    = f.color;
+  tc.textAlign    = 'left';
+  tc.textBaseline = 'middle';
+  tc.fillText(f.label, cx + 4, cy + topRowH * 0.54);
 
-  tc.font = `700 ${lblFs}px "Noto Sans JP"`;
-  tc.fillStyle = f.color; tc.textAlign = 'left'; tc.textBaseline = 'middle';
-  tc.fillText(f.label, cx+5, cy + cardH*0.36);
-  tc.font = `400 ${unitFs}px "Noto Sans JP"`;
-  tc.fillStyle = s.sub;
-  tc.fillText(f.unit, cx+5, cy + cardH*0.70);
+  // ── 単位フォント ──
+  const unitFs = Math.floor(btmRowH * 0.12);
+
+  // ── 数字サイズ：4桁がカード幅に収まる最大サイズ ──
+  const numAreaW = cardW - 4;
+  let priceFs = Math.floor(btmRowH * 0.95 * 1.56);
+  while (priceFs > 10) {
+    tc.font = `${priceFs}px Impact, "Arial Narrow", sans-serif`;
+    const cw = tc.measureText('0').width * 1.05;
+    if (cw * 4 <= numAreaW) break;
+    priceFs--;
+  }
+
+  // 数字描画（カード中央・実桁数基準）
+  tc.font = `${priceFs}px Impact, "Arial Narrow", sans-serif`;
+  const numMidX = cx + cardW / 2;
+  const { rightX: numRightX } = drawMonoPrice(tc, priceStr, numMidX, btmY + btmRowH * 0.44, priceFs, s.text, 4);
+
+  // 単位（数字の右端・下端に配置・カード外にはみ出さない）
+  tc.font         = `400 ${unitFs}px "Noto Sans JP"`;
+  tc.fillStyle    = s.sub;
+  const unitW2    = tc.measureText(f.unit).width;
+  const unitX     = Math.min(numRightX + 2, cx + cardW - unitW2 - 1);
+  tc.textAlign    = 'left';
+  tc.textBaseline = 'bottom';
+  tc.fillText(f.unit, unitX, btmY + btmRowH - 2);
   tc.textBaseline = 'alphabetic';
 }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gs-image-tool-v3';
+const CACHE_NAME = 'gs-image-tool-v4';
 const ASSETS = [
   './',
   './index.html',
