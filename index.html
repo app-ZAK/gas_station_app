@@ -375,7 +375,7 @@ let fuelDefs = [
   { label:'レギュラー', unit:'円/L',   color:'#e03a1e', price:168, visible:true  },
   { label:'ハイオク',   unit:'円/L',   color:'#f0a500', price:179, visible:true  },
   { label:'軽油',       unit:'円/L',   color:'#1a7fe0', price:148, visible:true  },
-  { label:'灯油',       unit:'円/18L', color:'#6db0e0', price:108, visible:false },
+  { label:'灯油',       unit:'円/L', color:'#6db0e0', price:108, visible:false },
 ];
 
 let slots = [
@@ -1163,21 +1163,9 @@ function downloadCurrent() {
 
 function downloadImage() { downloadCurrent(); }
 
-/* SAMPLEウォーターマーク共通関数 */
+/* SAMPLEウォーターマーク（無効化済み） */
 function addSampleWatermark(tc) {
-  tc.save();
-  tc.translate(SIZE/2, SIZE/2);
-  tc.rotate(-Math.PI / 5);
-  const fs = Math.floor(SIZE * 0.22);
-  tc.font = `900 ${fs}px sans-serif`;
-  tc.textAlign = 'center'; tc.textBaseline = 'middle';
-  tc.strokeStyle = 'rgba(255,255,255,0.55)';
-  tc.lineWidth   = fs * 0.12;
-  tc.lineJoin    = 'round';
-  tc.strokeText('SAMPLE', 0, 0);
-  tc.fillStyle = 'rgba(180,30,30,0.52)';
-  tc.fillText('SAMPLE', 0, 0);
-  tc.restore();
+  // ウォーターマークなし
 }
 
 /* 油種別ダウンロードボタンを更新 */
